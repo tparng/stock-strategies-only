@@ -1,7 +1,7 @@
 # 📈 台股每日選股機器人
 
 <p align="center">
-  <img src="assets/readme_banner.png" alt="台股每日選股機器人 Banner" width="100%" />
+  <img src="assets/readme_banner.png" alt="台股每日選股機器人 Banner" width="60%" />
 </p>
 
 - TODO: 嚴謹回測機制
