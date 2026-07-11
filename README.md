@@ -303,11 +303,26 @@ Google Sheet 股票池 → 跑策略評分 → Telegram 推播 + Sheet 紀錄
 
 ### Step 1：Fork & Clone
 
+1. 到這個 repo 頁面右上角按 **Fork** → **Create fork**
+2. Clone 你自己的 fork：
+
 ```bash
-# Fork 這個 repo 到你的 GitHub，然後
 git clone https://github.com/<你的帳號>/stock-strategies-only.git
 cd stock-strategies-only
+
+# 設定 upstream，之後可以一鍵同步原作者的更新
+git remote add upstream https://github.com/kevin801221/stock-strategies-only.git
 ```
+
+**日後同步原作者更新：**
+
+```bash
+git fetch upstream
+git merge upstream/main
+git push
+```
+
+> 也可以直接在 GitHub 網頁按 fork repo 頁面的 **Sync fork** → **Update branch**，不用開終端機。
 
 ### Step 2：建立 Google Sheet
 
@@ -337,7 +352,8 @@ cd stock-strategies-only
 ### Step 4：設定 Telegram Bot
 
 1. Telegram 搜尋 **@BotFather**，輸入 `/newbot` 建立機器人，拿到 `BOT_TOKEN`
-2. 搜尋 **@userinfobot**，拿到你的 `CHAT_ID`
+2. 對你剛建的 bot 按 **Start**（或傳送 `/start`）——這步不能跳過，bot 沒收過訊息就無法推播
+3. 拿你的 `CHAT_ID`：搜尋 **@userinfobot** 並傳送任何訊息，它會直接回覆你的 ID
 
 ### Step 5：設定 FinMind
 
@@ -380,6 +396,24 @@ uv run python main.py
 | `TELEGRAM_CHAT_ID` | 你的 Telegram Chat ID |
 | `GOOGLE_SHEET_ID` | 你的 Google Sheet ID |
 | `GOOGLE_CREDS_JSON` | Service Account JSON **整串貼進去** |
+
+**或者用 `gh` CLI 一次設定完（需先 `sudo snap install gh --classic` 並登入）：**
+
+```bash
+# 登入（需要 repo + read:org 權限的 Personal Access Token）
+echo "<YOUR_TOKEN>" | gh auth login --with-token
+
+# 從本機 .env 一次設好全部 secret
+uv run python3 -c "
+import os, subprocess
+from dotenv import load_dotenv
+load_dotenv()
+keys = ['FINMIND_TOKEN','TELEGRAM_BOT_TOKEN','TELEGRAM_CHAT_ID','GOOGLE_SHEET_ID','GOOGLE_CREDS_JSON']
+for k in keys:
+    subprocess.run(['gh','secret','set',k,'--repo','<你的帳號>/stock-strategies-only','--body',os.environ[k]])
+    print(k, 'set')
+"
+```
 
 > 不要把這五個值填到 **Variables**。本 repo 的 workflow 讀的是 `${{ secrets.FINMIND_TOKEN }}` 這種 `secrets.*`，如果填到 Variables，Actions 會顯示 `Missing ...` 或在執行時讀不到 token。Variables 只適合放非敏感設定，例如未來如果要自訂掃描檔數、策略名稱、debug 開關，才放那邊。
 
