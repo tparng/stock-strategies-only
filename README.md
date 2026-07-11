@@ -311,7 +311,7 @@ cd stock-strategies-only
 
 ### Step 2：建立 Google Sheet
 
-建一張新的 Google Sheet，第一個分頁命名為 **`Watchlist`**，欄位如下：
+建一張新的 Google Sheet，填入觀察清單：
 
 | stock_id | name | category | enabled |
 |----------|------|----------|---------|
@@ -323,7 +323,7 @@ cd stock-strategies-only
 - `category` — 自訂類股分類（用於類股強弱排名）
 - `enabled` — 設 `FALSE` 可暫停追蹤，不用刪除
 
-> `Signals` 分頁不用手動建，程式第一次跑會自動建立。
+> `Watchlist`、`Signals`、`Performance` 三個分頁**不用手動建**，程式第一次跑時會自動建立（含欄位 headers）。
 
 記下 Sheet ID（網址中 `https://docs.google.com/spreadsheets/d/【這段】/edit`）。
 
@@ -355,6 +355,11 @@ uv sync
 # 複製環境變數範本，填入你的值
 cp .env.example .env
 # 編輯 .env，填入上面拿到的各組 token
+#
+# 注意 GOOGLE_CREDS_JSON 要把整串 JSON 壓成一行，並用單引號包起來：
+#   GOOGLE_CREDS_JSON='{"type":"service_account","project_id":"...整串...}'
+# 可以用以下指令把下載的金鑰檔轉成正確格式：
+#   python3 -c "import json; print(json.dumps(json.load(open('your-key.json'))))"
 
 # 跑一次看看
 uv run python main.py
@@ -399,7 +404,8 @@ uv run python main.py
 | `Missing TELEGRAM_BOT_TOKEN` | secret 沒設或名稱拼錯 | 到 repo 的 Actions secrets 新增同名 secret |
 | `401 Unauthorized` | Telegram bot token 錯 | 回 @BotFather 重新複製 token |
 | `400 chat not found` | `TELEGRAM_CHAT_ID` 錯，或你還沒打開 bot | 先對你的 bot 按 `/start`，再重新查 chat id |
-| `讀取 watchlist 失敗` | Google Sheet secret 或分享權限錯 | 確認 `GOOGLE_CREDS_JSON` 是整串 JSON，且 service account email 已被加到 Sheet 編輯者 |
+| `Telegram 連線失敗` | 網路短暫中斷或 Telegram API 超時 | 重跑一次 workflow，通常是暫時性問題 |
+| `讀取 watchlist 失敗` | Google Sheet secret 或分享權限錯 | 確認 `GOOGLE_CREDS_JSON` 是整串 JSON（見 Step 6），且 service account email 已被加到 Sheet 編輯者 |
 | FinMind request/rate limit | `FINMIND_TOKEN` 錯或 API 額度暫時被打滿 | 確認 token，稍後重跑 workflow |
 
 > GitHub Actions 免費額度：Private repo 每月 2000 分鐘，這個 workflow 每次約 2 分鐘，每月最多跑 22 天（交易日）= 44 分鐘，完全免費。

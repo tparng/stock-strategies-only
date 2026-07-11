@@ -17,10 +17,19 @@ def get_gsheet():
     return gc.open_by_key(os.environ["GOOGLE_SHEET_ID"])
 
 
+def _get_or_create_watchlist(sh):
+    try:
+        return sh.worksheet("Watchlist")
+    except gspread.WorksheetNotFound:
+        ws = sh.add_worksheet(title="Watchlist", rows=1000, cols=5)
+        ws.append_row(["stock_id", "name", "enabled"])
+        return ws
+
+
 def read_watchlist() -> list[dict]:
     """從 Google Sheet Watchlist 分頁讀股票清單"""
     sh = get_gsheet()
-    ws = sh.worksheet("Watchlist")
+    ws = _get_or_create_watchlist(sh)
     rows = ws.get_all_records()
     enabled = [
         r for r in rows
@@ -89,7 +98,7 @@ def add_to_watchlist(stock_id: str, name: str = "") -> dict:
     若不存在 → append 新 row（enabled=TRUE）
     """
     sh = get_gsheet()
-    ws = sh.worksheet("Watchlist")
+    ws = _get_or_create_watchlist(sh)
     headers = _ensure_watchlist_headers(ws)
 
     sid_col = headers.index("stock_id") + 1  # gspread 是 1-based
@@ -126,7 +135,7 @@ def add_to_watchlist(stock_id: str, name: str = "") -> dict:
 def remove_from_watchlist(stock_id: str) -> dict:
     """把 Watchlist 該 stock_id 的 enabled 改成 FALSE（軟刪除，保留歷史）"""
     sh = get_gsheet()
-    ws = sh.worksheet("Watchlist")
+    ws = _get_or_create_watchlist(sh)
     headers = _ensure_watchlist_headers(ws)
     if "enabled" not in headers:
         return {"status": "no_enabled_column"}

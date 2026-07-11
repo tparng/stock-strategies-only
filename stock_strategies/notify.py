@@ -15,9 +15,12 @@ def send_telegram(text: str):
         "text": text,
         "parse_mode": "Markdown",
     }
-    r = requests.post(url, json=payload, timeout=10)
-    if not r.ok:
-        print(f"Telegram 送失敗: {r.text}", file=sys.stderr)
+    try:
+        r = requests.post(url, json=payload, timeout=10)
+        if not r.ok:
+            print(f"Telegram 送失敗: {r.text}", file=sys.stderr)
+    except requests.exceptions.RequestException as e:
+        print(f"Telegram 連線失敗: {e}", file=sys.stderr)
 
 
 def _trend_emoji(chg: float) -> str:
