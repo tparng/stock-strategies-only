@@ -311,7 +311,7 @@ cd stock-strategies-only
 
 ### Step 2：建立 Google Sheet
 
-建一張新的 Google Sheet，填入觀察清單：
+建一張新的 Google Sheet（檔名隨意），在 **`Watchlist` 分頁**填入觀察清單：
 
 | stock_id | name | category | enabled |
 |----------|------|----------|---------|
@@ -323,7 +323,7 @@ cd stock-strategies-only
 - `category` — 自訂類股分類（用於類股強弱排名）
 - `enabled` — 設 `FALSE` 可暫停追蹤，不用刪除
 
-> `Watchlist`、`Signals`、`Performance` 三個分頁**不用手動建**，程式第一次跑時會自動建立（含欄位 headers）。
+> `Watchlist`、`Signals`、`Performance` 三個**分頁名稱**不用手動建，程式第一次跑時會自動建立（含欄位 headers）。Google Sheet 檔案本身的名稱可以任意取，程式靠 `GOOGLE_SHEET_ID` 定位檔案。
 
 記下 Sheet ID（網址中 `https://docs.google.com/spreadsheets/d/【這段】/edit`）。
 
