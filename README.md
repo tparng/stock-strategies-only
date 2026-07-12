@@ -65,7 +65,7 @@
 
 新增兩個服務：
 
-- **FastAPI 後端** (`api/`)：策略 CRUD、Gemini 自動生策略、用任一策略執行 watchlist
+- **FastAPI 後端** (`api/`)：策略 CRUD、AI 自動生策略、用任一策略執行 watchlist
 - **Next.js 前端** (`web/`)：策略庫列表、手動建立表單、AI 生策略（自然語言 → JSON）、Dashboard
 
 > 介面預覽截圖在最下方 → [🖼️ Web UI 介面預覽](#-web-ui-介面預覽)
@@ -81,9 +81,45 @@ uv run uvicorn api.main:app --reload --port 8000
 cd web && npm install && npm run dev
 ```
 
-開 http://localhost:3000 即可。需新增環境變數 `GEMINI_API_KEY`（AI 生策略用，可選）。詳見 [`web/README.md`](web/README.md) 與 [`strategies/SCHEMA.md`](strategies/SCHEMA.md)。
+開 http://localhost:3000 即可。詳見 [`web/README.md`](web/README.md) 與 [`strategies/SCHEMA.md`](strategies/SCHEMA.md)。
 
 原本的 `main.py` 走排程跑 default 策略，跟新 UI 完全相容。
+
+### 🤖 AI 生策略後端：Gemini 或本機 Ollama（二擇一）
+
+AI 生策略功能支援兩種後端，透過環境變數切換：
+
+| 後端 | 適合情境 | 設定方式 |
+|------|---------|---------|
+| **Gemini**（雲端） | 沒有 GPU、想快速試用 | 設 `GEMINI_API_KEY` |
+| **Ollama**（本機） | 有 GPU、不想依賴雲端 API | 安裝 Ollama + 拉模型 |
+
+**自動判斷**：有 `GEMINI_API_KEY` 就走 Gemini；沒有就走 Ollama。也可以用 `AI_PROVIDER=ollama` 強制指定。
+
+#### 本機 GPU 方案（推薦：16GB VRAM 以上）
+
+推薦模型：**`qwen2.5:14b`** — 中文強、JSON 輸出準、14B 約佔 9GB VRAM。
+
+```bash
+# 1. 安裝 Ollama
+curl -fsSL https://ollama.com/install.sh | sh
+
+# 2. 拉模型（~9GB）
+ollama pull qwen2.5:14b
+
+# 3. 啟動後端時指定 Ollama
+AI_PROVIDER=ollama uv run uvicorn api.main:app --reload --port 8000
+```
+
+或在 `.env` 加入：
+
+```
+AI_PROVIDER=ollama
+OLLAMA_MODEL=qwen2.5:14b          # 預設值，可不設
+OLLAMA_BASE_URL=http://localhost:11434  # 預設值，可不設
+```
+
+> Ollama 需先在背景執行（`ollama serve`）才能被後端呼叫。
 
 ---
 
