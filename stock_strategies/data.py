@@ -9,6 +9,11 @@ from .config import FINMIND_URL
 from .cache import fetch_finmind_cached
 
 
+def is_us_stock(stock_id: str) -> bool:
+    """US tickers are alphabetic (AAPL, NVDA); TW tickers are numeric (2330)."""
+    return not stock_id.replace(".", "").replace("-", "").isdigit()
+
+
 def fetch_finmind(
     dataset: str,
     stock_id: str,
@@ -52,6 +57,13 @@ def fetch_finmind(
 
 
 def get_price_history(stock_id: str, years: int = 3) -> pd.DataFrame:
+    if is_us_stock(stock_id):
+        from .data_us import get_price_history_us
+        return get_price_history_us(stock_id, years)
+    return _get_price_history_tw(stock_id, years)
+
+
+def _get_price_history_tw(stock_id: str, years: int = 3) -> pd.DataFrame:
     start = (datetime.now() - timedelta(days=365 * years + 60)).strftime("%Y-%m-%d")
     df = fetch_finmind_cached("TaiwanStockPrice", stock_id, start)
     if df.empty:
@@ -64,6 +76,13 @@ def get_price_history(stock_id: str, years: int = 3) -> pd.DataFrame:
 
 
 def get_fundamental(stock_id: str) -> dict:
+    if is_us_stock(stock_id):
+        from .data_us import get_fundamental_us
+        return get_fundamental_us(stock_id)
+    return _get_fundamental_tw(stock_id)
+
+
+def _get_fundamental_tw(stock_id: str) -> dict:
     """近 3 完整年度 EPS、ROE。
 
     EPS = 該年單季 EPS 加總（年度）。

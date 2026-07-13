@@ -4,7 +4,7 @@ from typing import Optional
 import pandas as pd
 
 from .config import CONFIG
-from .data import get_fundamental, get_price_history
+from .data import get_fundamental, get_price_history, is_us_stock
 from .indicators import add_indicators, tech_score_at
 from .backtest import backtest
 from .volume import detect_patterns, verdict as volume_verdict
@@ -15,13 +15,20 @@ def evaluate(stock_id: str, name: str, strategy: dict | None = None) -> Optional
     """評估一檔股票。strategy 為策略 dict（含 params），不給就用預設值。"""
     params = merge_params(strategy)
 
+    us = is_us_stock(stock_id)
     result = {
         "stock_id": stock_id,
         "name": name,
+        "market": "US" if us else "TW",
         "date": datetime.now().strftime("%Y-%m-%d"),
         "strategy_id": (strategy or {}).get("id", "default"),
         "risk_notes": [],
     }
+
+    eps_thr = params.get("us_eps_threshold" if us else "eps_threshold",
+                         CONFIG["us_eps_threshold" if us else "eps_threshold"])
+    roe_thr = params.get("us_roe_threshold" if us else "roe_threshold",
+                         CONFIG["us_roe_threshold" if us else "roe_threshold"])
 
     try:
         fund = get_fundamental(stock_id)
@@ -30,8 +37,8 @@ def evaluate(stock_id: str, name: str, strategy: dict | None = None) -> Optional
         fund_pass = (
             len(eps_vals) >= 2
             and len(roe_vals) >= 2
-            and min(eps_vals) > params["eps_threshold"]
-            and min(roe_vals) > params["roe_threshold"]
+            and min(eps_vals) > eps_thr
+            and min(roe_vals) > roe_thr
         )
 
         px = get_price_history(stock_id, params["backtest_years"])

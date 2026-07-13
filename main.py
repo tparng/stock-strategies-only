@@ -29,7 +29,7 @@ from stock_strategies.sheet import (
 )
 from stock_strategies.evaluate import evaluate
 from stock_strategies.notify import send_telegram, format_messages
-from stock_strategies.market import get_market_state, apply_market_filter
+from stock_strategies.market import get_market_state, get_us_market_state, apply_market_filter
 from stock_strategies.night_session import (
     get_night_session,
     apply_night_filter,
@@ -62,6 +62,8 @@ def main():
     print("取得大盤狀態...")
     market = get_market_state()
     print(f"  → {market['note']}")
+    us_market = get_us_market_state()
+    print(f"  → {us_market['note']}")
 
     # 2b. 取得昨晚夜盤（情緒風控濾鏡）
     print("取得昨晚夜盤...")
@@ -81,7 +83,7 @@ def main():
         time.sleep(0.6)
 
     # 4. 套用大盤濾鏡：跌破月線時 BUY 一律降為 WATCH
-    downgraded = apply_market_filter(results, market)
+    downgraded = apply_market_filter(results, market, us_market)
     if downgraded:
         print(f"⚠️ 大盤跌破月線，{downgraded} 檔 BUY 已自動降為 WATCH")
 

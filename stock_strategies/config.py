@@ -24,8 +24,12 @@ MIN_PRICE_ROWS = 60               # 少於此列數視為新股／資料不足
 FUTURES_ID = "TX"
 
 CONFIG = {
+    # Taiwan thresholds (TWD-denominated EPS)
     "eps_threshold": 5.0,
     "roe_threshold": 15.0,
+    # US thresholds (USD-denominated EPS; ROE same scale)
+    "us_eps_threshold": 1.0,
+    "us_roe_threshold": 15.0,
     "backtest_years": 3,
     "hold_days": 20,
     "target_return": 0.10,

@@ -118,7 +118,7 @@ def apply_night_filter(results: list[dict], night: dict | None) -> int:
     downgraded = 0
     if night["bias"] == "bear" and pct <= -big:
         for r in results:
-            if r.get("action") == "BUY":
+            if r.get("action") == "BUY" and r.get("market", "TW") == "TW":
                 r["action"] = "WATCH"
                 r.setdefault("risk_notes", []).append(
                     f"昨晚夜盤大跌 {pct:+.1f}%，自動降為 WATCH"
