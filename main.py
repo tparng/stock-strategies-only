@@ -120,7 +120,9 @@ def main():
         else:
             print("  → 尚未有完成追蹤的訊號（需累積 20 交易日）")
     except Exception as e:
+        import traceback
         print(f"⚠️ Performance 追蹤失敗: {e}", file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
         stats = None
 
     # 7. 發送 Telegram
