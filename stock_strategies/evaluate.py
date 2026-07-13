@@ -34,6 +34,7 @@ def evaluate(stock_id: str, name: str, strategy: dict | None = None) -> Optional
         fund = get_fundamental(stock_id)
         eps_vals = list(fund["eps"].values())
         roe_vals = list(fund["roe"].values())
+        # TW binary fundamental gate (overridden for US stocks below)
         fund_pass = (
             len(eps_vals) >= 2
             and len(roe_vals) >= 2
@@ -57,22 +58,77 @@ def evaluate(stock_id: str, name: str, strategy: dict | None = None) -> Optional
         else:
             vp = {"patterns": [], "bonus": 0, "details": {}}
 
-        fund_score = 100 if fund_pass else 40
-        tech_score = max(0, min(100, ts["score"] + vp["bonus"]))
+        # Trend stats (moved before scoring so US path can use chg_20d)
+        chg_5d = (latest["close"] / px.iloc[-6]["close"] - 1) * 100 if len(px) >= 6 else 0.0
+        chg_20d = (latest["close"] / px.iloc[-21]["close"] - 1) * 100 if len(px) >= 21 else 0.0
+        vol_5 = px["volume"].iloc[-5:].mean()
+        vol_20 = px["volume"].iloc[-20:].mean()
+        vol_ratio = vol_5 / vol_20 if vol_20 > 0 else 1.0
+        high_252 = px["high"].iloc[-252:].max() if len(px) >= 252 else px["high"].max()
+        low_252 = px["low"].iloc[-252:].min() if len(px) >= 252 else px["low"].min()
+        pct_from_high = (latest["close"] / high_252 - 1) * 100
+        above_ma20 = latest["close"] > latest["ma20"] if pd.notna(latest.get("ma20")) else False
+        above_ma60 = latest["close"] > latest["ma60"] if pd.notna(latest.get("ma60")) else False
+
+        # ── Scoring: US path uses richer multi-factor scoring ──────────────────
+        us_fund_score: float | None = None
+        us_fund_signals: list[str] = []
+
+        if us:
+            from .evaluate_us import us_fundamental_score, us_tech_bonus, earnings_days_ahead
+            from .market import get_spy_20d_return
+
+            # Graduated fundamental score (0–100) replaces binary 100/40
+            us_fund_score, us_fund_signals = us_fundamental_score(fund)
+            fund_score = us_fund_score
+            fund_pass = us_fund_score >= 60       # used for risk note below
+            fund_gate = us_fund_score >= 35        # minimum to qualify for BUY
+
+            # RSI + relative-strength-vs-SPY bonus on top of base tech score
+            spy_ret = get_spy_20d_return()
+            rsi_raw = latest.get("rsi")
+            rsi_val = float(rsi_raw) if (rsi_raw is not None and pd.notna(rsi_raw)) else None
+            us_bonus, us_signals = us_tech_bonus(
+                rsi=rsi_val,
+                stock_ret_20d=chg_20d,
+                spy_ret_20d=spy_ret,
+            )
+            tech_score = max(0, min(100, ts["score"] + vp["bonus"] + us_bonus))
+            ts["signals"].extend(us_signals)
+
+            # Earnings proximity risk
+            days_to_earn = earnings_days_ahead(fund.get("next_earnings"))
+            if days_to_earn is not None and days_to_earn <= 7:
+                result["risk_notes"].append(
+                    f"財報公布在即（{days_to_earn} 天後，{fund['next_earnings']}），持有風險高"
+                )
+
+            # RSI overbought risk
+            if rsi_val is not None and rsi_val > 75:
+                result["risk_notes"].append(f"RSI {rsi_val:.0f} 超買，短期追高風險")
+
+            # Weak relative strength vs SPY
+            if spy_ret is not None and (chg_20d - spy_ret) < -5:
+                result["risk_notes"].append(
+                    f"近 20 日相對 SPY 落後 {chg_20d - spy_ret:.1f}%，動能偏弱"
+                )
+        else:
+            fund_score = 100 if fund_pass else 40
+            tech_score = max(0, min(100, ts["score"] + vp["bonus"]))
+            fund_gate = (not params["fundamental_pass_required"]) or fund_pass
+
         winrate = bt.get("winrate") or 0.5
         bt_score = winrate * 100
 
         wf = params["weight_fundamental"]
         wt = params["weight_technical"]
         wb = params["weight_backtest"]
-        # 正規化權重
         wsum = wf + wt + wb
         if wsum > 0:
             wf, wt, wb = wf / wsum, wt / wsum, wb / wsum
 
         signal_score = round(wf * fund_score + wt * tech_score + wb * bt_score, 1)
 
-        fund_gate = (not params["fundamental_pass_required"]) or fund_pass
         if (
             signal_score >= params["min_total_score_for_buy"]
             and fund_gate
@@ -106,24 +162,13 @@ def evaluate(stock_id: str, name: str, strategy: dict | None = None) -> Optional
         if bt.get("samples", 0) < 8:
             result["risk_notes"].append(f"回測樣本僅 {bt.get('samples', 0)} 次，統計弱")
         if not fund_pass:
-            result["risk_notes"].append("基本面未過門檻")
+            result["risk_notes"].append("基本面未過門檻" if not us else f"美股基本面分 {us_fund_score:.0f}/100")
         if winrate < 0.5:
             result["risk_notes"].append(f"歷史勝率 {winrate*100:.0f}% 低於五成")
         if pd.notna(latest.get("bb_upper")) and latest["close"] > latest["bb_upper"]:
             result["risk_notes"].append("已突破布林上軌，追高風險")
         if "放量滯漲" in vp["patterns"]:
             result["risk_notes"].append("偵測到放量滯漲，高檔爆量疑似出貨")
-
-        chg_5d = (latest["close"] / px.iloc[-6]["close"] - 1) * 100 if len(px) >= 6 else 0
-        chg_20d = (latest["close"] / px.iloc[-21]["close"] - 1) * 100 if len(px) >= 21 else 0
-        vol_5 = px["volume"].iloc[-5:].mean()
-        vol_20 = px["volume"].iloc[-20:].mean()
-        vol_ratio = vol_5 / vol_20 if vol_20 > 0 else 1
-        high_252 = px["high"].iloc[-252:].max() if len(px) >= 252 else px["high"].max()
-        low_252 = px["low"].iloc[-252:].min() if len(px) >= 252 else px["low"].min()
-        pct_from_high = (latest["close"] / high_252 - 1) * 100
-        above_ma20 = latest["close"] > latest["ma20"] if pd.notna(latest["ma20"]) else False
-        above_ma60 = latest["close"] > latest["ma60"] if pd.notna(latest["ma60"]) else False
 
         result.update({
             # For US stocks, use the actual last price date as the signal date so that
@@ -136,6 +181,8 @@ def evaluate(stock_id: str, name: str, strategy: dict | None = None) -> Optional
                 "fundamental_pass": fund_pass,
                 "eps_min": min(eps_vals) if eps_vals else None,
                 "roe_min": min(roe_vals) if roe_vals else None,
+                "us_fund_score": us_fund_score,
+                "us_fund_signals": us_fund_signals,
                 "tech_score": tech_score,
                 "tech_signals": ts["signals"],
                 "backtest_winrate": winrate,

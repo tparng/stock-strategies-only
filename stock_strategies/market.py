@@ -9,6 +9,28 @@ import pandas as pd
 
 from .datasources import get_index_history
 
+# Process-level SPY cache — one yfinance fetch per main.py run
+_SPY_CACHE: dict = {}
+
+
+def _get_spy_df() -> pd.DataFrame:
+    """Fetch SPY 60-day history, cached for the process lifetime."""
+    if "df" not in _SPY_CACHE:
+        import yfinance as yf
+        _SPY_CACHE["df"] = yf.Ticker("SPY").history(period="60d", auto_adjust=True)
+    return _SPY_CACHE["df"]
+
+
+def get_spy_20d_return() -> float | None:
+    """SPY 20-trading-day return (%), reusing the cached SPY DataFrame."""
+    try:
+        df = _get_spy_df()
+        if df.empty or len(df) < 21:
+            return None
+        return round(float(df["Close"].iloc[-1] / df["Close"].iloc[-21] - 1) * 100, 2)
+    except Exception:
+        return None
+
 
 def get_market_state(ma_period: int = 20) -> dict:
     """台股大盤狀態（TAIEX 月線）"""
@@ -36,8 +58,7 @@ def get_market_state(ma_period: int = 20) -> dict:
 def get_us_market_state(ma_period: int = 20) -> dict:
     """美股大盤狀態（SPY 月線）"""
     try:
-        import yfinance as yf
-        df = yf.Ticker("SPY").history(period="60d", auto_adjust=True)
+        df = _get_spy_df()
         if df.empty or len(df) < ma_period + 1:
             return {"bullish": True, "close": None, "ma20": None,
                     "note": "⚠️ SPY 資料不足，暫不套用美股濾鏡"}

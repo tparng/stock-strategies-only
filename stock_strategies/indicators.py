@@ -33,6 +33,12 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     ], axis=1).max(axis=1)
     df["atr"] = tr.rolling(14).mean()
 
+    # RSI-14 (Wilder smoothing) — used by US scoring path; available for all stocks
+    delta = df["close"].diff()
+    gain = delta.clip(lower=0).ewm(alpha=1 / 14, adjust=False).mean()
+    loss = (-delta).clip(lower=0).ewm(alpha=1 / 14, adjust=False).mean()
+    df["rsi"] = 100 - 100 / (1 + gain / loss)
+
     return df
 
 

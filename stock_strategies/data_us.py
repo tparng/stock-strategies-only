@@ -27,10 +27,34 @@ def get_price_history_us(ticker: str, years: int = 3) -> pd.DataFrame:
     return df[["date", "open", "high", "low", "close", "volume"]].sort_values("date").reset_index(drop=True)
 
 
-def get_fundamental_us(ticker: str) -> dict:
-    """Fetch annual EPS (USD) and ROE (%) for the last 3 full years via yfinance.
+def _get_next_earnings(t) -> str | None:
+    """Next scheduled earnings date as YYYY-MM-DD, or None."""
+    try:
+        cal = t.calendar
+        if not isinstance(cal, dict):
+            return None
+        dates = cal.get("Earnings Date", [])
+        if not dates:
+            return None
+        next_dt = pd.Timestamp(dates[0])
+        if next_dt > pd.Timestamp.now():
+            return next_dt.strftime("%Y-%m-%d")
+    except Exception:
+        pass
+    return None
 
-    Falls back to TTM figures from ticker.info when annual statements are unavailable.
+
+def get_fundamental_us(ticker: str) -> dict:
+    """Fetch EPS (USD), ROE (%), and extended US-specific metrics via yfinance.
+
+    Return dict keys (backward-compatible — existing keys preserved):
+        eps, roe                          — annual dicts {year: float}
+        eps_growth, revenue_growth        — TTM YoY growth rates (decimal, e.g. 0.25)
+        profit_margin, gross_margin       — decimal (e.g. 0.20 = 20%)
+        pe_trailing, pe_forward, peg      — ratio values
+        debt_to_equity                    — yfinance format (ratio × 100, e.g. 25 ≈ 0.25x)
+        current_ratio                     — ratio (e.g. 2.5)
+        next_earnings                     — 'YYYY-MM-DD' string or None
     """
     try:
         import yfinance as yf
@@ -40,9 +64,16 @@ def get_fundamental_us(ticker: str) -> dict:
     cy = datetime.now().year
     eps: dict[int, float] = {}
     roe: dict[int, float] = {}
+    info: dict = {}
 
     try:
         t = yf.Ticker(ticker)
+
+        # ── Extended info (always fetch — needed for growth/margin/valuation) ──
+        try:
+            info = t.info or {}
+        except Exception:
+            info = {}
 
         # ── Annual income statement + balance sheet ──
         try:
@@ -67,7 +98,6 @@ def get_fundamental_us(ticker: str) -> dict:
                             for col in income.columns:
                                 y = col.year if hasattr(col, "year") else int(str(col)[:4])
                                 ni = income.loc["Net Income", col]
-                                # Find closest bs column for same fiscal year
                                 bs_match = [c for c in bs.columns
                                             if (c.year if hasattr(c, "year") else int(str(c)[:4])) == y]
                                 if bs_match:
@@ -79,24 +109,47 @@ def get_fundamental_us(ticker: str) -> dict:
             pass  # fall through to info fallback
 
         # ── Fallback: TTM from ticker.info ──
-        if not eps or not roe:
-            info = t.info
-            if not eps:
-                ttm = info.get("trailingEps")
-                if ttm is not None:
-                    # Duplicate across two years as a proxy for trend
-                    eps[cy - 1] = round(float(ttm), 2)
-                    eps[cy - 2] = round(float(ttm), 2)
-            if not roe:
-                ttm_roe = info.get("returnOnEquity")
-                if ttm_roe is not None:
-                    roe[cy - 1] = round(float(ttm_roe) * 100, 2)
-                    roe[cy - 2] = round(float(ttm_roe) * 100, 2)
+        if not eps:
+            ttm = info.get("trailingEps")
+            if ttm is not None:
+                eps[cy - 1] = round(float(ttm), 2)
+                eps[cy - 2] = round(float(ttm), 2)
+        if not roe:
+            ttm_roe = info.get("returnOnEquity")
+            if ttm_roe is not None:
+                roe[cy - 1] = round(float(ttm_roe) * 100, 2)
+                roe[cy - 2] = round(float(ttm_roe) * 100, 2)
+
+        next_earnings = _get_next_earnings(t)
 
     except Exception:
-        pass
+        next_earnings = None
+
+    def _pct(key: str) -> float | None:
+        v = info.get(key)
+        return round(float(v), 4) if v is not None else None
+
+    def _val(key: str) -> float | None:
+        v = info.get(key)
+        return round(float(v), 4) if v is not None else None
 
     return {
+        # Existing keys (backward-compatible)
         "eps": {y: v for y, v in eps.items() if cy - 3 <= y < cy},
         "roe": {y: v for y, v in roe.items() if cy - 3 <= y < cy},
+        # Growth (decimal form, e.g. 0.25 = 25% YoY)
+        "eps_growth": _pct("earningsGrowth"),
+        "revenue_growth": _pct("revenueGrowth"),
+        # Profitability (decimal, e.g. 0.20 = 20%)
+        "profit_margin": _pct("profitMargins"),
+        "gross_margin": _pct("grossMargins"),
+        # Valuation
+        "pe_trailing": _val("trailingPE"),
+        "pe_forward": _val("forwardPE"),
+        "peg": _val("pegRatio"),
+        # Financial health
+        "debt_to_equity": _val("debtToEquity"),   # yfinance returns ratio×100
+        "current_ratio": _val("currentRatio"),
+        # Earnings calendar
+        "next_earnings": next_earnings,
     }
