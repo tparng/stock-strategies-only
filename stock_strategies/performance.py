@@ -57,7 +57,8 @@ def update_performance(
         if px.empty:
             continue
         px = px.sort_values("date").reset_index(drop=True)
-        px["date_str"] = px["date"].dt.strftime("%Y-%m-%d")
+        # date column may be string (FinMind/yfinance) or datetime (Parquet round-trip)
+        px["date_str"] = pd.to_datetime(px["date"]).dt.strftime("%Y-%m-%d")
         date_to_iloc = {d: i for i, d in enumerate(px["date_str"].tolist())}
 
         for r in recs:

@@ -89,10 +89,19 @@ def evaluate(stock_id: str, name: str, strategy: dict | None = None) -> Optional
         target_price = round(entry * (1 + params["target_return"]), 2)
         rr = round(params["target_return"] / params["stop_loss"], 2)
         position_pct = min(2.0 / (params["stop_loss"] * 100) * 100, 20.0)
-        entry_rule = (
-            f"明日以開盤價進場，停損 -{params['stop_loss']*100:.0f}% / "
-            f"停利 +{params['target_return']*100:.0f}%（下方參考價為今日收盤）"
-        )
+        if us:
+            # Signal runs at 14:30 Taiwan time = pre-open US time; latest price is
+            # the previous US session close. Entry is at the next US open (same Taiwan day).
+            entry_rule = (
+                f"下個美股交易日以開盤價進場，停損 -{params['stop_loss']*100:.0f}% / "
+                f"停利 +{params['target_return']*100:.0f}%"
+                f"（參考價為最近一個美股交易日收盤 {latest['date']}）"
+            )
+        else:
+            entry_rule = (
+                f"明日以開盤價進場，停損 -{params['stop_loss']*100:.0f}% / "
+                f"停利 +{params['target_return']*100:.0f}%（下方參考價為今日收盤）"
+            )
 
         if bt.get("samples", 0) < 8:
             result["risk_notes"].append(f"回測樣本僅 {bt.get('samples', 0)} 次，統計弱")
@@ -117,6 +126,10 @@ def evaluate(stock_id: str, name: str, strategy: dict | None = None) -> Optional
         above_ma60 = latest["close"] > latest["ma60"] if pd.notna(latest["ma60"]) else False
 
         result.update({
+            # For US stocks, use the actual last price date as the signal date so that
+            # performance tracking can correctly find the entry bar in the price history.
+            # (System runs at 14:30 Taiwan = pre-open US time; US close data is from yesterday.)
+            "date": str(latest["date"]) if us else result["date"],
             "action": action,
             "signal_score": signal_score,
             "components": {
