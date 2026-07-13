@@ -59,6 +59,29 @@
 
 ---
 
+## 🇺🇸 新功能（已上線）：美股支援
+
+Watchlist 現在可以混搭台股與美股（NVDA、AAPL 這類英文代碼），系統會自動識別：
+
+| | 台股 | 美股 |
+|---|---|---|
+| 代碼格式 | 數字（如 `2330`） | 英文字母（如 `NVDA`） |
+| 資料來源 | FinMind API | yfinance |
+| EPS 門檻 | > 5.0 TWD | > 1.0 USD |
+| ROE 門檻 | > 15% | > 15% |
+| 大盤濾鏡 | 加權指數月線 | SPY 月線 |
+| 夜盤濾鏡 | ✅ 套用（台指期） | ❌ 不套用（無關台期） |
+
+在 Google Sheet 的 Watchlist 分頁直接加一行即可，無需其他設定：
+
+| stock_id | name | enabled |
+|----------|------|---------|
+| 2330 | 台積電 | TRUE |
+| NVDA | Nvidia | TRUE |
+| AAPL | Apple | TRUE |
+
+---
+
 ## 🆕 V3.3 — 策略庫 + AI 生策略 Web UI
 
 過去只有 Telegram 通知，這版開始有了**完整的互動式網頁介面**。`main.py` 的單一寫死策略也重構成「**參數化策略**」，每個策略 = `strategies/<id>.json` 一份檔案，可在網頁上建立、調參、執行。
@@ -499,8 +522,12 @@ for k in keys:
 ### 基本面篩選
 
 ```python
-# 近 3 年每年都要達標
-EPS > 5.0   # 每股盈餘
+# 近 3 年每年都要達標（台股）
+EPS > 5.0   # 每股盈餘（TWD）
+ROE > 15%   # 股東權益報酬率
+
+# 美股用不同門檻（USD 計價 EPS 數量級不同）
+EPS > 1.0   # 每股盈餘（USD）
 ROE > 15%   # 股東權益報酬率
 ```
 
@@ -551,8 +578,10 @@ ROE > 15%   # 股東權益報酬率
 
 ```python
 CONFIG = {
-    "eps_threshold": 5.0,       # EPS 門檻，降低可納入更多股票
-    "roe_threshold": 15.0,      # ROE 門檻
+    "eps_threshold": 5.0,       # 台股 EPS 門檻（TWD），降低可納入更多股票
+    "roe_threshold": 15.0,      # 台股 ROE 門檻
+    "us_eps_threshold": 1.0,    # 美股 EPS 門檻（USD，數量級不同）
+    "us_roe_threshold": 15.0,   # 美股 ROE 門檻
     "backtest_years": 3,        # 回測年數
     "hold_days": 20,            # 持有天數（交易日）
     "target_return": 0.10,      # 停利 10%
@@ -643,8 +672,9 @@ stock-strategies-only/
 ├── stock_strategies/
 │   ├── config.py              # 策略參數 & 常數（含夜盤門檻）
 │   ├── sheet.py               # Google Sheet 讀寫
-│   ├── data.py                # FinMind API 資料抓取
-│   ├── market.py              # 大盤濾鏡（加權指數月線）
+│   ├── data.py                # 資料路由（台股 → FinMind，美股 → yfinance）
+│   ├── data_us.py             # 美股資料抓取（yfinance：K 線 + EPS/ROE）
+│   ├── market.py              # 大盤濾鏡（台股：加權指數月線；美股：SPY 月線）
 │   ├── night_session.py       # 夜盤抓取 + 開盤方向分類
 │   ├── indicators.py          # 技術指標計算 + 評分
 │   ├── backtest.py            # 歷史回測
@@ -691,6 +721,15 @@ Private repo 每月免費 2000 分鐘，這個 workflow 每次約 2 分鐘，每
 <summary><b>想用 LINE Notify 而不是 Telegram？</b></summary>
 
 改寫 `stock_strategies/notify.py` 裡的 `send_telegram()` 函式，換成 LINE Notify API 即可，其他模組完全不用動。
+
+</details>
+
+<details>
+<summary><b>可以加入美股嗎？</b></summary>
+
+可以，直接在 Google Sheet 的 Watchlist 分頁加一行，`stock_id` 填美股 ticker（如 `NVDA`、`AAPL`），系統會自動識別並切換成 yfinance 抓資料。
+
+美股會套用獨立的 EPS 門檻（$1.0 USD vs 台股 5.0 TWD）和 SPY 大盤濾鏡，夜盤濾鏡則不套用（台指期夜盤與美股無關）。
 
 </details>
 
